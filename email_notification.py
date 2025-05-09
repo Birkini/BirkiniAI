@@ -1,50 +1,68 @@
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import os
+import logging
+from flask import Flask, render_template, request, jsonify
 from flask_mail import Mail, Message
-from flask import Flask, render_template
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Flask application setup
 app = Flask(__name__)
 
-# Flask-Mail setup
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'your_email@gmail.com'  # Your email address
-app.config['MAIL_PASSWORD'] = 'your_email_password'  # Your email password
+# Load mail configuration from environment variables
+app.config.update(
+    MAIL_SERVER=os.getenv('MAIL_SERVER', 'smtp.gmail.com'),
+    MAIL_PORT=int(os.getenv('MAIL_PORT', 587)),
+    MAIL_USE_TLS=os.getenv('MAIL_USE_TLS', 'true').lower() in ('true', '1', 'yes'),
+    MAIL_USERNAME=os.getenv('MAIL_USERNAME'),
+    MAIL_PASSWORD=os.getenv('MAIL_PASSWORD'),
+    MAIL_DEFAULT_SENDER=os.getenv('MAIL_DEFAULT_SENDER', os.getenv('MAIL_USERNAME')),
+)
+
 mail = Mail(app)
 
-def send_email(subject, recipient, body):
-    """Send email notifications to users."""
+def send_email(subject: str, recipient: str, template_name: str, **context) -> None:
+    """
+    Send an email using Flask-Mail with both text and HTML templates.
+
+    :param subject: Email subject
+    :param recipient: Recipient email address
+    :param template_name: Base name of the templates (without extension)
+    :param context: Variables to pass into the templates
+    """
+    msg = Message(subject=subject, recipients=[recipient])
+    msg.body = render_template(f'{template_name}.txt', **context)
+    msg.html = render_template(f'{template_name}.html', **context)
+
     try:
-        msg = MIMEMultipart()
-        msg['From'] = app.config['MAIL_USERNAME']
-        msg['To'] = recipient
-        msg['Subject'] = subject
-        
-        # Attach the body of the email to the MIME message
-        msg.attach(MIMEText(body, 'plain'))
-        
-        # Set up the server and send the email
-        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'])
-        server.starttls()
-        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
-        server.sendmail(msg['From'], msg['To'], msg.as_string())
-        server.quit()
-        
-        print(f"Email sent successfully to {recipient}")
+        mail.send(msg)
+        logger.info(f"Email sent to {recipient}: {subject}")
     except Exception as e:
-        print(f"Error sending email: {str(e)}")
+        logger.exception(f"Failed to send email to {recipient}")
 
-@app.route('/send_notification/<user_email>')
-def send_notification(user_email):
-    """Send a notification email to a user."""
-    subject = "Your Data Processing is Complete"
-    body = "Hello, your data has been successfully processed. You can now view the results in your dashboard."
-    
-    send_email(subject, user_email, body)
-    return f"Notification sent to {user_email}"
+@app.route('/send_notification', methods=['POST'])
+def send_notification():
+    """
+    Send a notification email.
+    Expects JSON payload:
+    {
+      "email": "<recipient_email>",
+      "subject": "<email_subject>",
+      "message": "<plain_text_message>"
+    }
+    """
+    data = request.get_json() or {}
+    email = data.get('email')
+    subject = data.get('subject', 'Notification from Birkini')
+    message = data.get('message', '')
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    if not email:
+        return jsonify({"error": "Missing 'email' field"}), 400
+
+    send_email(subject, email, 'notification', message=message)
+    return jsonify({"message": f"Notification sent to {email}"}), 200
+
+if __name__ == '__main__':
+    debug_mode = os.getenv('FLASK_DEBUG', 'false').lower() in ('true', '1', 'yes')
+    app.run(debug=debug_mode)
