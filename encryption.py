@@ -1,42 +1,42 @@
 from cryptography.fernet import Fernet
 import os
 
-# Load the encryption key (must be stored securely)
-ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', 'your-encryption-key')
+# Load encryption key from environment or raise error if not found
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY')
+if not ENCRYPTION_KEY:
+    raise EnvironmentError("ENCRYPTION_KEY not set in environment variables.")
 
-# Initialize the Fernet encryption system
-cipher = Fernet(ENCRYPTION_KEY)
+# Initialize Fernet with the provided key
+cipher = Fernet(ENCRYPTION_KEY.encode() if isinstance(ENCRYPTION_KEY, str) else ENCRYPTION_KEY)
 
-def generate_key():
-    """Generate a new encryption key (use this once and store securely)"""
+def generate_key() -> str:
+    """Generate a new Fernet encryption key and return it as a UTF-8 string"""
     key = Fernet.generate_key()
-    print(f"Your new encryption key: {key.decode()}")
-    return key
+    print(f"Generated encryption key: {key.decode()}")
+    return key.decode()
 
 def encrypt_data(data: str) -> str:
-    """Encrypt data using the Fernet symmetric encryption"""
-    if isinstance(data, str):
-        data = data.encode()  # Ensure the data is in bytes
-    encrypted_data = cipher.encrypt(data)
-    return encrypted_data.decode()  # Return as string for ease of storage
+    """Encrypt a string and return the ciphertext as a UTF-8 string"""
+    if not isinstance(data, str):
+        raise TypeError("Data must be a string.")
+    encrypted = cipher.encrypt(data.encode())
+    return encrypted.decode()
 
 def decrypt_data(encrypted_data: str) -> str:
-    """Decrypt data using the Fernet symmetric encryption"""
-    encrypted_data = encrypted_data.encode()  # Ensure the data is in bytes
-    decrypted_data = cipher.decrypt(encrypted_data)
-    return decrypted_data.decode()  # Return as string
+    """Decrypt a previously encrypted UTF-8 string"""
+    if not isinstance(encrypted_data, str):
+        raise TypeError("Encrypted data must be a string.")
+    decrypted = cipher.decrypt(encrypted_data.encode())
+    return decrypted.decode()
 
 # Example usage
 if __name__ == "__main__":
-    # Example data to encrypt and decrypt
-    sample_data = "Sensitive user information here"
+    example = "Sensitive user information"
+    print("Original:", example)
 
-    print("Original data:", sample_data)
+    encrypted = encrypt_data(example)
+    print("Encrypted:", encrypted)
 
-    # Encrypt data
-    encrypted_data = encrypt_data(sample_data)
-    print("Encrypted data:", encrypted_data)
+    decrypted = decrypt_data(encrypted)
+    print("Decrypted:", decrypted)
 
-    # Decrypt data
-    decrypted_data = decrypt_data(encrypted_data)
-    print("Decrypted data:", decrypted_data)
