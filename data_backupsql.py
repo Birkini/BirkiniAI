@@ -2,56 +2,44 @@ import os
 import shutil
 import time
 from datetime import datetime
+from pathlib import Path
 
 # Configuration settings
-BACKUP_DIR = "/path/to/backup/directory"
-SOURCE_DIR = "/path/to/your/data/directory"
-BACKUP_RETENTION_DAYS = 7  # Keep backups for the last 7 days
+BACKUP_DIR = Path("/path/to/backup/directory")
+SOURCE_DIR = Path("/path/to/your/data/directory")
+BACKUP_RETENTION_DAYS = 7  # Number of days to keep backups
 
-# Helper function to perform the backup
 def perform_backup():
-    """Backup the data to a specific directory."""
+    """Create a timestamped backup of the source directory."""
     try:
-        # Get the current timestamp
-        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        backup_folder = os.path.join(BACKUP_DIR, f"backup_{current_time}")
-        
-        # Create the backup folder
-        os.makedirs(backup_folder, exist_ok=True)
-        
-        # Copy all files from the source directory to the backup directory
-        for item in os.listdir(SOURCE_DIR):
-            source_item = os.path.join(SOURCE_DIR, item)
-            backup_item = os.path.join(backup_folder, item)
-            
-            if os.path.isdir(source_item):
-                shutil.copytree(source_item, backup_item)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_path = BACKUP_DIR / f"backup_{timestamp}"
+        backup_path.mkdir(parents=True, exist_ok=True)
+
+        for item in SOURCE_DIR.iterdir():
+            target = backup_path / item.name
+            if item.is_dir():
+                shutil.copytree(item, target)
             else:
-                shutil.copy2(source_item, backup_item)
-        
-        print(f"Backup completed successfully: {backup_folder}")
-    except Exception as e:
-        print(f"Error during backup: {str(e)}")
+                shutil.copy2(item, target)
 
-# Helper function to delete old backups based on retention policy
+        print(f"✅ Backup completed: {backup_path}")
+    except Exception as e:
+        print(f"❌ Backup failed: {e}")
+
 def cleanup_old_backups():
-    """Delete backups older than the retention period."""
+    """Remove backup folders older than the retention policy allows."""
     try:
-        current_time = time.time()
-        for folder in os.listdir(BACKUP_DIR):
-            folder_path = os.path.join(BACKUP_DIR, folder)
-            if os.path.isdir(folder_path):
-                folder_creation_time = os.path.getctime(folder_path)
-                age_in_days = (current_time - folder_creation_time) / (3600 * 24)
-                
-                if age_in_days > BACKUP_RETENTION_DAYS:
-                    shutil.rmtree(folder_path)
-                    print(f"Deleted old backup: {folder_path}")
+        now = time.time()
+        for folder in BACKUP_DIR.iterdir():
+            if folder.is_dir():
+                age_days = (now - folder.stat().st_ctime) / (3600 * 24)
+                if age_days > BACKUP_RETENTION_DAYS:
+                    shutil.rmtree(folder)
+                    print(f"🗑️ Deleted old backup: {folder}")
     except Exception as e:
-        print(f"Error during cleanup: {str(e)}")
+        print(f"❌ Cleanup failed: {e}")
 
-# Schedule the backup and cleanup tasks (can be scheduled with cron or Windows Task Scheduler)
 if __name__ == "__main__":
-    # Perform the backup and cleanup on each run
     perform_backup()
     cleanup_old_backups()
