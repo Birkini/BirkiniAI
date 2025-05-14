@@ -58,3 +58,4 @@ if __name__ == "__main__":
 
     # Example: Insert a new transaction
     create_transaction(1, 200.00, "2023-05-01")
+
