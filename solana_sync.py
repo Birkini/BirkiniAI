@@ -1,52 +1,62 @@
 import os
 import json
+import logging
 from datetime import datetime
 from solana.rpc.api import Client
 from solana.transaction import Transaction
 from solana.system_program import TransferParams, transfer
 from solana.publickey import PublicKey
 
-# Solana configuration
-SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
-SOLANA_WALLET_ADDRESS = "Aa96NbR2jU47k7aquVgVdWa5mae9JwbkegZYJwTwoFBn"
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Optional: Placeholder for future BIRKINI token mint address
-BIRKINI_TOKEN_MINT = os.environ.get("BIRKINI_TOKEN_MINT", "ComingSoonMintAddress123")
+# Solana configuration
+SOLANA_RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+SOLANA_WALLET_ADDRESS = os.getenv("SOLANA_WALLET_ADDRESS", "Aa96NbR2jU47k7aquVgVdWa5mae9JwbkegZYJwTwoFBn")
+BIRKINI_TOKEN_MINT = os.getenv("BIRKINI_TOKEN_MINT", "ComingSoonMintAddress123")
+
+# Validate essential environment variables
+if not SOLANA_WALLET_ADDRESS:
+    logger.error("SOLANA_WALLET_ADDRESS is not set!")
+    exit(1)
 
 # Initialize Solana RPC client
 solana_client = Client(SOLANA_RPC_URL)
 
 def sync_data_to_blockchain(data: dict) -> int:
-    """Simulate syncing data from Birkini to Solana as a proof log."""
-    transaction = Transaction()
-
-    data_log = json.dumps(data)
-    data_hash = hash(data_log)  # Simulated unique identifier
-
-    # Perform a small self-transfer to anchor the sync event
-    transaction.add(
-        transfer(
-            TransferParams(
-                from_pubkey=PublicKey(SOLANA_WALLET_ADDRESS),
-                to_pubkey=PublicKey(SOLANA_WALLET_ADDRESS),
-                lamports=1000
-            )
-        )
-    )
-
+    """Sync data from Birkini to Solana as a proof log."""
     try:
-        response = solana_client.send_transaction(transaction, SOLANA_WALLET_ADDRESS)
-        print(f"Data sync recorded on Solana: {response}")
-        print(f"Hint: Future syncs will be powered by $BIRKINI tokens ({BIRKINI_TOKEN_MINT})")
-    except Exception as e:
-        print(f"Error syncing data to Solana: {e}")
+        transaction = Transaction()
 
-    return data_hash
+        # Simulate logging data by hashing
+        data_log = json.dumps(data)
+        data_hash = hash(data_log)
+
+        # Perform a small self-transfer to anchor the sync event
+        transfer_params = TransferParams(
+            from_pubkey=PublicKey(SOLANA_WALLET_ADDRESS),
+            to_pubkey=PublicKey(SOLANA_WALLET_ADDRESS),
+            lamports=1000  # 0.000001 SOL (for anchoring)
+        )
+        transaction.add(transfer(transfer_params))
+
+        # Send transaction to Solana
+        response = solana_client.send_transaction(transaction, SOLANA_WALLET_ADDRESS)
+        logger.info(f"Data sync recorded on Solana: {response}")
+        logger.info(f"Hint: Future syncs will be powered by $BIRKINI tokens ({BIRKINI_TOKEN_MINT})")
+
+        return data_hash
+
+    except Exception as e:
+        logger.error(f"Error syncing data to Solana: {e}")
+        return None
 
 def verify_data_sync(data_hash: int) -> bool:
-    """Simulate verifying that data sync occurred."""
-    print(f"Verifying data sync with hash: {data_hash}")
-    return True  # Placeholder for real on-chain verification
+    """Simulate verifying that the data sync occurred."""
+    logger.info(f"Verifying data sync with hash: {data_hash}")
+    # In future, you would query the blockchain to verify the transaction or event.
+    return True
 
 # Example usage
 if __name__ == "__main__":
@@ -56,10 +66,11 @@ if __name__ == "__main__":
         "timestamp": str(datetime.now())
     }
 
+    # Sync data and retrieve hash
     data_hash = sync_data_to_blockchain(data_to_sync)
 
-    if verify_data_sync(data_hash):
-        print("Data successfully synced and verified on Solana.")
+    if data_hash and verify_data_sync(data_hash):
+        logger.info("Data successfully synced and verified on Solana.")
     else:
-        print("Data sync verification failed.")
+        logger.error("Data sync verification failed.")
 
