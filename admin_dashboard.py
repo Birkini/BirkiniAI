@@ -1,74 +1,73 @@
 import os
+import logging
 import pandas as pd
 from flask import Flask, jsonify, request
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from datetime import datetime
 
-# Flask application setup
+# Flask app setup
 app = Flask(__name__)
 
-# Database URI
+# Logging setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Database connection
 DATABASE_URI = os.environ.get('DATABASE_URI', 'sqlite:///birkini.db')
 engine = create_engine(DATABASE_URI)
 
-# Helper function to fetch logs
-def get_system_logs():
-    """Fetch system logs for monitoring purposes"""
-    log_file_path = os.environ.get('LOG_FILE_PATH', 'system_log.json')
+def get_system_logs() -> list | dict:
+    """Read system logs from JSON log file"""
+    log_path = os.environ.get('LOG_FILE_PATH', 'system_log.json')
     try:
-        with open(log_file_path, 'r') as file:
-            logs = [line.strip() for line in file.readlines()]
-        return logs
+        with open(log_path, 'r') as f:
+            return [line.strip() for line in f]
     except Exception as e:
-        return {"error": f"Could not read logs: {str(e)}"}
+        logger.error(f"Failed to read logs: {e}")
+        return {"error": "Could not read logs."}
 
-# Helper function to get all users from the database
-def get_all_users():
-    """Fetch all users from the user_data table"""
+def get_all_users() -> list | dict:
+    """Fetch all user data"""
     try:
         query = "SELECT * FROM user_data"
-        users = pd.read_sql(query, engine)
-        return users.to_dict(orient="records")
+        df = pd.read_sql(query, engine)
+        return df.to_dict(orient="records")
     except Exception as e:
-        return {"error": f"Could not fetch users: {str(e)}"}
+        logger.error(f"Failed to fetch users: {e}")
+        return {"error": "Could not fetch users."}
 
-# Admin route to get system logs
 @app.route("/admin/logs", methods=["GET"])
 def fetch_logs():
-    logs = get_system_logs()
-    return jsonify(logs), 200
+    return jsonify(get_system_logs()), 200
 
-# Admin route to view all users
 @app.route("/admin/users", methods=["GET"])
 def view_users():
-    users = get_all_users()
-    return jsonify(users), 200
+    return jsonify(get_all_users()), 200
 
-# Admin route to delete a user by user ID
-@app.route("/admin/users/<user_id>", methods=["DELETE"])
-def delete_user(user_id):
+@app.route("/admin/users/<int:user_id>", methods=["DELETE"])
+def delete_user(user_id: int):
     try:
-        with engine.connect() as conn:
-            result = conn.execute(f"DELETE FROM user_data WHERE user_id = {user_id}")
-            return jsonify({"message": f"User {user_id} deleted successfully"}), 200
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM user_data WHERE user_id = :uid"), {"uid": user_id})
+        logger.info(f"User {user_id} deleted.")
+        return jsonify({"message": f"User {user_id} deleted successfully"}), 200
     except Exception as e:
-        return jsonify({"error": f"Could not delete user {user_id}: {str(e)}"}), 500
+        logger.error(f"Error deleting user {user_id}: {e}")
+        return jsonify({"error": "Could not delete user."}), 500
 
-# Admin route to view system stats
 @app.route("/admin/stats", methods=["GET"])
 def get_system_stats():
     try:
-        # Example system stats (extend with actual metrics like CPU usage, RAM, etc.)
         stats = {
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H-%M-%S"),
             "active_users": 1234,
             "total_requests": 5678,
             "uptime": "48 hours"
         }
         return jsonify(stats), 200
     except Exception as e:
-        return jsonify({"error": f"Could not fetch system stats: {str(e)}"}), 500
+        logger.error(f"Failed to get stats: {e}")
+        return jsonify({"error": "Could not fetch system stats."}), 500
 
-# Run the Flask server
 if __name__ == "__main__":
     app.run(debug=True)
