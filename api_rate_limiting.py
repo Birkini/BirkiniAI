@@ -1,44 +1,61 @@
 import time
+import logging
 from collections import defaultdict
 
-# Set the maximum number of requests a user can make in a given time frame
-MAX_REQUESTS = 100  # Max requests per time window
-TIME_WINDOW = 3600  # Time window in seconds (e.g., 3600s = 1 hour)
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Store request counts per user (or IP address)
+# Configuration
+MAX_REQUESTS = 100       # Max requests allowed
+TIME_WINDOW = 3600       # Time window in seconds (1 hour)
+
+# In-memory store of user request timestamps
 user_requests = defaultdict(list)
 
-def record_request(user_id):
-    """Record a user's request and enforce rate limiting."""
-    current_time = time.time()
-    
-    # Clean up expired requests (older than the time window)
-    user_requests[user_id] = [timestamp for timestamp in user_requests[user_id] if current_time - timestamp < TIME_WINDOW]
-    
-    # Check if the user has exceeded the request limit
-    if len(user_requests[user_id]) >= MAX_REQUESTS:
-        return False  # Rate limit exceeded
-    else:
-        user_requests[user_id].append(current_time)
-        return True  # Request allowed
+def record_request(user_id: str) -> bool:
+    """
+    Record a request timestamp for a user and check rate limit.
 
-def handle_api_request(user_id):
-    """Simulate handling an API request while enforcing rate limiting."""
+    Args:
+        user_id (str): Unique identifier for the user (e.g., IP or user ID)
+
+    Returns:
+        bool: True if request is allowed, False if rate limit exceeded
+    """
+    current_time = time.time()
+    timestamps = user_requests[user_id]
+
+    # Remove old timestamps
+    user_requests[user_id] = [ts for ts in timestamps if current_time - ts < TIME_WINDOW]
+
+    if len(user_requests[user_id]) >= MAX_REQUESTS:
+        return False
+
+    user_requests[user_id].append(current_time)
+    return True
+
+def handle_api_request(user_id: str) -> str:
+    """
+    Simulate handling an API request with rate limiting applied.
+
+    Args:
+        user_id (str): Identifier of the requesting user
+
+    Returns:
+        str: Result message
+    """
     if record_request(user_id):
-        print(f"Request from user {user_id} is allowed.")
-        # Process the request (e.g., return data, execute query, etc.)
+        logger.info(f"✅ Request from user {user_id} allowed.")
         return "Request processed successfully."
     else:
-        print(f"Request from user {user_id} has been rate-limited.")
-        # Handle the rate-limiting scenario (e.g., send an error message)
+        logger.warning(f"⛔ Request from user {user_id} was rate-limited.")
         return "Rate limit exceeded. Please try again later."
 
 # Example usage
 if __name__ == "__main__":
-    user_id = "user123"
-
-    # Simulate multiple requests
+    test_user = "user123"
     for i in range(105):
-        response = handle_api_request(user_id)
-        print(response)
-        time.sleep(0.5)  # Simulate a small delay between requests
+        print(handle_api_request(test_user))
+        time.sleep(0.5)
+
